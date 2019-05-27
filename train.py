@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser()
 # input size for training of the network
 parser.add_argument('--input_size', type=int, default=512)
 # batch size for training
-parser.add_argument('--batch_size', type=int, default=16)
+parser.add_argument('--batch_size', type=int, default=8)
 # number of processes to spin up when using process based threading, as defined in
 # https://keras.io/models/model/#fit_generator
 parser.add_argument('--nb_workers', type=int, default=4)
@@ -47,7 +47,7 @@ parser.add_argument('--save_checkpoint_epochs', type=int, default=10)
 # path to training data
 parser.add_argument('--training_data_path', type=str, default='data/train_data')
 # path to validation data
-parser.add_argument('--validation_data_path', type=str, default='data/MLT/val_data_latin')
+parser.add_argument('--validation_data_path', type=str, default='data/val_data')
 # maximum size of the large side of a training image before cropping a patch for training
 parser.add_argument('--max_image_large_side', type=int, default=1280)
 # maximum size of a text instance in an image; image resized if this limit is exceeded
@@ -237,7 +237,7 @@ def lr_decay(epoch):
     return FLAGS.init_learning_rate * np.power(FLAGS.lr_decay_rate, epoch // FLAGS.lr_decay_steps)
 
 
-def main(argv=None):
+def main():
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu_list
     FLAGS.checkpoint_path = osp.join(FLAGS.checkpoint_path, str(datetime.date.today()))
     # check if checkpoint path exists
@@ -247,8 +247,7 @@ def main(argv=None):
         shutil.rmtree(FLAGS.checkpoint_path)
         os.makedirs(FLAGS.checkpoint_path)
 
-    train_data_generator = data_processor.generator(FLAGS, vis=True)
-    next(train_data_generator)
+    train_data_generator = data_processor.generator(FLAGS)
     train_samples_count = data_processor.count_samples(FLAGS)
 
     val_data = data_processor.load_data(FLAGS)
@@ -290,10 +289,14 @@ def main(argv=None):
     with open(FLAGS.checkpoint_path + '/model.json', 'w') as json_file:
         json_file.write(model_json)
 
-    history = parallel_model.fit_generator(train_data_generator, epochs=FLAGS.max_epochs,
+    history = parallel_model.fit_generator(train_data_generator,
+                                           epochs=FLAGS.max_epochs,
                                            steps_per_epoch=train_samples_count / FLAGS.batch_size,
-                                           workers=FLAGS.nb_workers, use_multiprocessing=True, max_queue_size=10,
-                                           callbacks=callbacks, verbose=1)
+                                           workers=FLAGS.nb_workers,
+                                           use_multiprocessing=True,
+                                           max_queue_size=10,
+                                           callbacks=callbacks,
+                                           verbose=1)
 
 
 if __name__ == '__main__':

@@ -184,11 +184,12 @@ def check_annotations(images_dir):
                 #     print(clockwise)
                 #     print('{} text_poly {} in {}'.format(i, text_polys[i], image_fname))
                 area = polygon_area(counter_clockwise)
-                if area < 100:
+                if area > 10000:
                     print('too small area, to remove')
                     print('{} text_poly in {} whose area is {}'.format(i, image_fname, area))
                     cv2.drawContours(image, [counter_clockwise.astype(np.int32)], -1, (0, 255, 0), 2)
                     show_image(image, 'small')
+                    cv2.waitKey(0)
 
 
 def polygon_area(poly):
@@ -233,13 +234,10 @@ def check_and_validate_polys(FLAGS, polys, tags, size):
     for poly, tag in zip(polys, tags):
         p_area = polygon_area(poly)
         if abs(p_area) < 1:
-            # print poly
-            if not FLAGS.suppress_warnings_and_error_messages:
-                print('invalid poly')
+            print('invalid poly')
             continue
         if p_area > 0:
-            if not FLAGS.suppress_warnings_and_error_messages:
-                print('poly in wrong direction')
+            print('poly in wrong direction')
             poly = poly[(0, 3, 2, 1), :]
         validated_polys.append(poly)
         validated_tags.append(tag)
@@ -421,15 +419,13 @@ def fit_line(p1, p2):
         return [k, -1., b]
 
 
-def line_cross_point(FLAGS, line1, line2):
+def line_cross_point(line1, line2):
     # line1 0= ax+by+c, compute the cross point of line1 and line2
     if line1[0] != 0 and line1[0] == line2[0]:
-        if not FLAGS.suppress_warnings_and_error_messages:
-            print('Cross point does not exist')
+        print('Cross point does not exist')
         return None
     if line1[0] == 0 and line2[0] == 0:
-        if not FLAGS.suppress_warnings_and_error_messages:
-            print('Cross point does not exist')
+        print('Cross point does not exist')
         return None
     if line1[1] == 0:
         x = -line1[2]
@@ -459,12 +455,11 @@ def line_verticle(line, point):
     return verticle
 
 
-def rectangle_from_parallelogram(FLAGS, poly):
+def rectangle_from_parallelogram(poly):
     """
     fit a rectangle from a parallelogram
 
     Args:
-        FLAGS:
         poly:
 
     Returns:
@@ -472,53 +467,55 @@ def rectangle_from_parallelogram(FLAGS, poly):
     """
     p0, p1, p2, p3 = poly
     # 参考 https://baike.baidu.com/item/%E7%82%B9%E7%A7%AF/9648528?fr=aladdin 的代数定义推到几何定义
+    # 余弦定理求两个向量的夹角
     angle_p0 = np.arccos(np.dot(p1 - p0, p3 - p0) / (np.linalg.norm(p0 - p1) * np.linalg.norm(p3 - p0)))
+    # 如果 p0 是锐角
     if angle_p0 < 0.5 * np.pi:
         # 判断边的长度是为了获取面积最小的外接矩形, 而不仅仅是外接矩形
         if np.linalg.norm(p0 - p1) > np.linalg.norm(p0 - p3):
             # new p3
             p2p3 = fit_line([p2[0], p3[0]], [p2[1], p3[1]])
             p2p3_verticle = line_verticle(p2p3, p0)
-            new_p3 = line_cross_point(FLAGS, p2p3, p2p3_verticle)
+            new_p3 = line_cross_point(p2p3, p2p3_verticle)
             # new p1
             p0p1 = fit_line([p0[0], p1[0]], [p0[1], p1[1]])
             p0p1_verticle = line_verticle(p0p1, p2)
-            new_p1 = line_cross_point(FLAGS, p0p1, p0p1_verticle)
+            new_p1 = line_cross_point(p0p1, p0p1_verticle)
             return np.array([p0, new_p1, p2, new_p3], dtype=np.float32)
         else:
             # new p1
             p1p2 = fit_line([p1[0], p2[0]], [p1[1], p2[1]])
             p1p2_verticle = line_verticle(p1p2, p0)
-            new_p1 = line_cross_point(FLAGS, p1p2, p1p2_verticle)
+            new_p1 = line_cross_point(p1p2, p1p2_verticle)
             # new p3
             p0p3 = fit_line([p0[0], p3[0]], [p0[1], p3[1]])
             p0p3_verticle = line_verticle(p0p3, p2)
-            new_p3 = line_cross_point(FLAGS, p0p3, p0p3_verticle)
+            new_p3 = line_cross_point(p0p3, p0p3_verticle)
             return np.array([p0, new_p1, p2, new_p3], dtype=np.float32)
     else:
         if np.linalg.norm(p0 - p1) > np.linalg.norm(p0 - p3):
             # new p2
             p2p3 = fit_line([p2[0], p3[0]], [p2[1], p3[1]])
             p2p3_verticle = line_verticle(p2p3, p1)
-            new_p2 = line_cross_point(FLAGS, p2p3, p2p3_verticle)
+            new_p2 = line_cross_point(p2p3, p2p3_verticle)
             # new p0
             p0p1 = fit_line([p0[0], p1[0]], [p0[1], p1[1]])
             p0p1_verticle = line_verticle(p0p1, p3)
-            new_p0 = line_cross_point(FLAGS, p0p1, p0p1_verticle)
+            new_p0 = line_cross_point(p0p1, p0p1_verticle)
             return np.array([new_p0, p1, new_p2, p3], dtype=np.float32)
         else:
             # new p0
             p0p3 = fit_line([p0[0], p3[0]], [p0[1], p3[1]])
             p0p3_verticle = line_verticle(p0p3, p1)
-            new_p0 = line_cross_point(FLAGS, p0p3, p0p3_verticle)
+            new_p0 = line_cross_point(p0p3, p0p3_verticle)
             # new p2
             p1p2 = fit_line([p1[0], p2[0]], [p1[1], p2[1]])
             p1p2_verticle = line_verticle(p1p2, p3)
-            new_p2 = line_cross_point(FLAGS, p1p2, p1p2_verticle)
+            new_p2 = line_cross_point(p1p2, p1p2_verticle)
             return np.array([new_p0, p1, new_p2, p3], dtype=np.float32)
 
 
-def sort_rectangle(FLAGS, poly):
+def sort_rectangle(poly):
     # sort the four coordinates of the polygon, points in poly should be sorted clockwise
     # First find the lowest point 就是 y 值最大的点
     p_lowest = np.argmax(poly[:, 1])
@@ -536,8 +533,7 @@ def sort_rectangle(FLAGS, poly):
             -(poly[p_lowest][1] - poly[p_lowest_right][1]) / (poly[p_lowest][0] - poly[p_lowest_right][0]))
         # assert angle > 0
         if angle <= 0:
-            if not FLAGS.suppress_warnings_and_error_messages:
-                print(angle, poly[p_lowest], poly[p_lowest_right])
+            print(angle, poly[p_lowest], poly[p_lowest_right])
         if angle / np.pi * 180 > 45:
             # 认为这个点为 p2 - this point is p2
             p2_index = p_lowest
@@ -688,7 +684,7 @@ def generate_rbox(FLAGS, im_size, polys, tags):
                     edge_opposite = [edge[0], -1, p3[1] - edge[0] * p3[0]]
             # move forward edge
             new_p1 = p1
-            new_p2 = line_cross_point(FLAGS, forward_edge, edge_opposite)
+            new_p2 = line_cross_point(forward_edge, edge_opposite)
             if point_dist_to_line(p1, new_p2, p0) > point_dist_to_line(p1, new_p2, p3):
                 # across p0
                 if forward_edge[1] == 0:
@@ -701,12 +697,12 @@ def generate_rbox(FLAGS, im_size, polys, tags):
                     forward_opposite = [1, 0, -p3[0]]
                 else:
                     forward_opposite = [forward_edge[0], -1, p3[1] - forward_edge[0] * p3[0]]
-            new_p0 = line_cross_point(FLAGS, forward_opposite, edge)
-            new_p3 = line_cross_point(FLAGS, forward_opposite, edge_opposite)
+            new_p0 = line_cross_point(forward_opposite, edge)
+            new_p3 = line_cross_point(forward_opposite, edge_opposite)
             fitted_parallelograms.append([new_p0, new_p1, new_p2, new_p3, new_p0])
             # or move backward edge
             new_p0 = p0
-            new_p3 = line_cross_point(FLAGS, backward_edge, edge_opposite)
+            new_p3 = line_cross_point(backward_edge, edge_opposite)
             if point_dist_to_line(p0, p3, p1) > point_dist_to_line(p0, p3, p2):
                 # across p1
                 if backward_edge[1] == 0:
@@ -719,12 +715,13 @@ def generate_rbox(FLAGS, im_size, polys, tags):
                     backward_opposite = [1, 0, -p2[0]]
                 else:
                     backward_opposite = [backward_edge[0], -1, p2[1] - backward_edge[0] * p2[0]]
-            new_p1 = line_cross_point(FLAGS, backward_opposite, edge)
-            new_p2 = line_cross_point(FLAGS, backward_opposite, edge_opposite)
+            new_p1 = line_cross_point(backward_opposite, edge)
+            new_p2 = line_cross_point(backward_opposite, edge_opposite)
             fitted_parallelograms.append([new_p0, new_p1, new_p2, new_p3, new_p0])
         # 8 个平行四边形的面积
         areas = [Polygon(t).area for t in fitted_parallelograms]
         # 面积最小的平行四边形的顶点坐标, -1 表示把最后一个元素 new_p0 去掉
+        fitted_parallelograms = np.array(fitted_parallelograms)
         parallelogram = np.array(fitted_parallelograms[np.argmin(areas)][:-1], dtype=np.float32)
         # sort this polygon
         parallelogram_coord_sum = np.sum(parallelogram, axis=1)
@@ -732,8 +729,8 @@ def generate_rbox(FLAGS, im_size, polys, tags):
         parallelogram = parallelogram[
             [min_coord_idx, (min_coord_idx + 1) % 4, (min_coord_idx + 2) % 4, (min_coord_idx + 3) % 4]]
         # 获得面积最小的外接矩形
-        rectange = rectangle_from_parallelogram(FLAGS, parallelogram)
-        rectange, rotate_angle = sort_rectangle(FLAGS, rectange)
+        rectange = rectangle_from_parallelogram(parallelogram)
+        rectange, rotate_angle = sort_rectangle(rectange)
 
         p0_rect, p1_rect, p2_rect, p3_rect = rectange
         for y, x in xy_in_poly:
@@ -775,8 +772,14 @@ def pad_image(img, input_size, is_train):
     img_padded = np.zeros((max_h_w_i, max_h_w_i, 3), dtype=np.uint8)
     if is_train:
         # adam
-        shift_h = np.random.randint(max_h_w_i - new_h)
-        shift_w = np.random.randint(max_h_w_i - new_w)
+        if max_h_w_i == new_h:
+            shift_h = 0
+        else:
+            shift_h = np.random.randint(max_h_w_i - new_h)
+        if max_h_w_i == new_w:
+            shift_w = 0
+        else:
+            shift_w = np.random.randint(max_h_w_i - new_w)
         # shift_h = np.random.randint(max_h_w_i - new_h + 1)
         # shift_w = np.random.randint(max_h_w_i - new_w + 1)
     else:
@@ -824,8 +827,7 @@ def generator(FLAGS, input_size=512, background_ratio=3 / 8, is_train=True, idx=
                 h, w, _ = im.shape
                 txt_fn = get_text_file(im_fn)
                 if not os.path.exists(txt_fn):
-                    if not FLAGS.suppress_warnings_and_error_messages:
-                        print('text file {} does not exists'.format(txt_fn))
+                    print('text file {} does not exists'.format(txt_fn))
                     continue
 
                 text_polys, text_tags = load_annotation(txt_fn)
@@ -926,8 +928,7 @@ def generator(FLAGS, input_size=512, background_ratio=3 / 8, is_train=True, idx=
                     text_region_boundary_training_masks = []
             except Exception as e:
                 import traceback
-                if not FLAGS.suppress_warnings_and_error_messages:
-                    traceback.print_exc()
+                traceback.print_exc()
                 continue
         epoch += 1
 
@@ -955,8 +956,7 @@ def val_generator(FLAGS, idx=None, is_train=False):
                 h, w, _ = im.shape
                 txt_fn = get_text_file(im_fn)
                 if not os.path.exists(txt_fn):
-                    if not FLAGS.suppress_warnings_and_error_messages:
-                        print('text file {} does not exists'.format(txt_fn))
+                    print('text file {} does not exists'.format(txt_fn))
                     continue
 
                 text_polys, text_tags = load_annotation(txt_fn)
@@ -991,8 +991,7 @@ def val_generator(FLAGS, idx=None, is_train=False):
                     text_region_boundary_training_masks = []
             except Exception as e:
                 import traceback
-                if not FLAGS.suppress_warnings_and_error_messages:
-                    traceback.print_exc()
+                traceback.print_exc()
                 continue
         epoch += 1
 
@@ -1004,8 +1003,7 @@ def count_samples(FLAGS):
         return len([f for f in os.walk(FLAGS.training_data_path).next()[2] if f[-4:] == ".jpg"])
 
 
-def load_data_process(args):
-    (image_file, FLAGS, is_train) = args
+def load_data_process(FLAGS, image_file, is_train):
     try:
         img = cv2.imread(image_file)
         h, w, _ = img.shape
@@ -1027,29 +1025,16 @@ def load_data_process(args):
             np.float32), text_region_boundary_training_mask[::4, ::4, np.newaxis].astype(np.float32)
     except Exception as e:
         import traceback
-        if not FLAGS.suppress_warnings_and_error_messages:
-            traceback.print_exc()
+        traceback.print_exc()
 
 
 def load_data(FLAGS, is_train=False):
     image_files = np.array(get_images(FLAGS.validation_data_path))
-    images = []
-    image_fns = []
-    score_maps = []
-    geo_maps = []
-    overly_small_text_region_training_masks = []
-    text_region_boundary_training_masks = []
 
-    pool = Pool(FLAGS.nb_workers)
-    if sys.version_info >= (3, 0):
-        loaded_data = pool.map_async(load_data_process,
-                                     zip(image_files, itertools.repeat(FLAGS), itertools.repeat(is_train))).get(9999999)
-    else:
-        loaded_data = pool.map_async(load_data_process, itertools.izip(image_files, itertools.repeat(FLAGS),
-                                                                       itertools.repeat(is_train))).get(9999999)
-    pool.close()
-    pool.join()
-
+    loaded_data = []
+    for image_file in image_files:
+        data = load_data_process(FLAGS, image_file, is_train)
+        loaded_data.append(data)
     images = [item[0] for item in loaded_data if not item is None]
     image_fns = [item[1] for item in loaded_data if not item is None]
     score_maps = [item[2] for item in loaded_data if not item is None]
@@ -1063,30 +1048,30 @@ def load_data(FLAGS, is_train=False):
 
 
 if __name__ == '__main__':
-    # check_annotations('data/train_data')
+    check_annotations('data/train_data')
     # corners2 = np.array([[3771, 1850], [3887, 1850], [3887, 2070], [3771, 2070]])
     # reordered_corner2 = reorder_vertexes(corners2)
     # print(polygon_area(reordered_corner2[0]))
     # print(polygon_area(reordered_corner2[1]))
-    parser = argparse.ArgumentParser()
-    FLAGS = parser.parse_args()
-    FLAGS.suppress_warnings_and_error_messages = False
-    FLAGS.min_crop_side_ratio = 0.1
-    images_dir = 'data/train_data'
-    for image_path in glob.glob(osp.join(images_dir, '*.jpg')):
-        image = cv2.imread(image_path)
-        h, w = image.shape[:2]
-        image_fname = osp.split(image_path)[-1]
-        image_fname_noext = osp.splitext(image_fname)[0]
-        label_fname = 'gt_' + image_fname_noext + '.txt'
-        label_path = osp.join(images_dir, label_fname)
-        text_polys, text_tags = load_annotation(label_path)
-        text_polys, text_tags = check_and_validate_polys(FLAGS, text_polys, text_tags, (h, w))
-        crop_image, crop_text_polys, crop_text_tags = crop_area(FLAGS, image, text_polys, text_tags,
-                                                                crop_background=True)
-        cv2.drawContours(crop_image, crop_text_polys.astype(np.int32), -1, (0, 255, 0), 2)
-        show_image(crop_image, 'crop_image')
-        cv2.drawContours(image, text_polys.astype(np.int32), -1, (0, 255, 0), 2)
-        show_image(image, 'image')
-        cv2.waitKey(0)
+    # parser = argparse.ArgumentParser()
+    # FLAGS = parser.parse_args()
+    # FLAGS.suppress_warnings_and_error_messages = False
+    # FLAGS.min_crop_side_ratio = 0.1
+    # images_dir = 'data/train_data'
+    # for image_path in glob.glob(osp.join(images_dir, '*.jpg')):
+    #     image = cv2.imread(image_path)
+    #     h, w = image.shape[:2]
+    #     image_fname = osp.split(image_path)[-1]
+    #     image_fname_noext = osp.splitext(image_fname)[0]
+    #     label_fname = 'gt_' + image_fname_noext + '.txt'
+    #     label_path = osp.join(images_dir, label_fname)
+    #     text_polys, text_tags = load_annotation(label_path)
+    #     text_polys, text_tags = check_and_validate_polys(FLAGS, text_polys, text_tags, (h, w))
+    #     crop_image, crop_text_polys, crop_text_tags = crop_area(FLAGS, image, text_polys, text_tags,
+    #                                                             crop_background=True)
+    #     cv2.drawContours(crop_image, crop_text_polys.astype(np.int32), -1, (0, 255, 0), 2)
+    #     show_image(crop_image, 'crop_image')
+    #     cv2.drawContours(image, text_polys.astype(np.int32), -1, (0, 255, 0), 2)
+    #     show_image(image, 'image')
+    #     cv2.waitKey(0)
 

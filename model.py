@@ -12,7 +12,7 @@ RESIZE_FACTOR = 2
 
 
 def resize_bilinear(x):
-    return tf.image.resize_bilinear(x, size=[K.shape(x)[1] * RESIZE_FACTOR, K.shape(x)[2] * RESIZE_FACTOR])
+    return tf.image.resize_bilinear(x, size=[K.int_shape(x)[1] * RESIZE_FACTOR, K.int_shape(x)[2] * RESIZE_FACTOR])
 
 
 def resize_output_shape(input_shape):
@@ -26,7 +26,8 @@ def resize_output_shape(input_shape):
 class EAST_model:
 
     def __init__(self, input_size=512):
-        input_image = Input(shape=(None, None, 3), name='input_image')
+        # input_image = Input(shape=(None, None, 3), name='input_image')
+        input_image = Input(shape=(512, 512, 3), name='input_image')
         overly_small_text_region_training_mask = Input(shape=(None, None, 1),
                                                        name='overly_small_text_region_training_mask')
         text_region_boundary_training_mask = Input(shape=(None, None, 1), name='text_region_boundary_training_mask')
@@ -53,7 +54,8 @@ class EAST_model:
         x = Activation('relu')(x)
 
         x = Lambda(resize_bilinear, name='resize_3')(x)
-        x = concatenate([x, ZeroPadding2D(((1, 0), (1, 0)))(resnet.get_layer('activation_10').output)], axis=3)
+        # x = concatenate([x, ZeroPadding2D(((1, 0), (1, 0)))(resnet.get_layer('activation_10').output)], axis=3)
+        x = concatenate([x, resnet.get_layer('activation_10').output], axis=3)
         x = Conv2D(32, (1, 1), padding='same', kernel_regularizer=regularizers.l2(1e-5))(x)
         x = BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(x)
         x = Activation('relu')(x)
@@ -74,7 +76,7 @@ class EAST_model:
 
         model = Model(inputs=[input_image, overly_small_text_region_training_mask, text_region_boundary_training_mask,
                               target_score_map], outputs=[pred_score_map, pred_geo_map])
-
+        model.summary()
         self.model = model
         self.input_image = input_image
         self.overly_small_text_region_training_mask = overly_small_text_region_training_mask
@@ -82,3 +84,7 @@ class EAST_model:
         self.target_score_map = target_score_map
         self.pred_score_map = pred_score_map
         self.pred_geo_map = pred_geo_map
+
+
+if __name__ == '__main__':
+    east = EAST_model()
